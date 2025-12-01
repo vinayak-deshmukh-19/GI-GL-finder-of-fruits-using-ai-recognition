@@ -7,26 +7,33 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
 
 /**
  * ------------------------------------------------------------------
- * FIREBASE CONFIGURATION & INITIALIZATION
+ * FIREBASE CONFIGURATION
+ * ------------------------------------------------------------------
+ * Your specific keys are now integrated below.
  * ------------------------------------------------------------------
  */
-// In a real deployed app, you would replace these with your own Firebase config keys.
-// For this preview, we use the environment's provided config if available.
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "your-app.firebaseapp.com",
-  projectId: "your-app",
-  storageBucket: "your-app.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
+const firebaseConfig = {
+  apiKey: "AIzaSyB0qsFhnVpqog08HCmUIi7FpkdkV6O09Kc",
+  authDomain: "ai-recognition-of-food-gi-gl.firebaseapp.com",
+  projectId: "ai-recognition-of-food-gi-gl",
+  storageBucket: "ai-recognition-of-food-gi-gl.firebasestorage.app",
+  messagingSenderId: "21245340258",
+  appId: "1:21245340258:web:6b11036056fdf5b82bbf3b",
+  measurementId: "G-TJLYS2NG7L"
 };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
+// Initialize Firebase
+let app, auth;
+try {
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+} catch (e) {
+  console.error("Firebase init failed:", e);
+}
 
 /**
  * ------------------------------------------------------------------
- * MASSIVE FOOD DATABASE (Fruits + Indian Foods)
+ * MASSIVE FOOD DATABASE
  * ------------------------------------------------------------------
  */
 const FOOD_DB = {
@@ -47,7 +54,7 @@ const FOOD_DB = {
   "naan": { name: "Naan (Butter)", gi: 71, gl: 20, serving: "1 piece", tips: "Refined flour (Maida) causes spikes. Avoid if possible." },
   "rajma": { name: "Rajma (Kidney Beans)", gi: 24, gl: 6, serving: "1 cup", tips: "Excellent low GI choice." },
 
-  // --- FRUITS (Previous DB) ---
+  // --- FRUITS ---
   "acai": { name: "Acai Berry", gi: 15, gl: 1, serving: "100g puree", tips: "Superfood. Very low sugar, high in antioxidants." },
   "apple": { name: "Apple (Red/Golden)", gi: 36, gl: 6, serving: "1 medium (138g)", tips: "Always eat with skin for fiber." },
   "apple_green": { name: "Apple (Granny Smith)", gi: 30, gl: 5, serving: "1 medium", tips: "The best apple choice for diabetics due to lower sugar." },
@@ -114,10 +121,11 @@ export default function App() {
 
   // --- AUTH LISTENERS & LOGIC ---
   useEffect(() => {
+    if (!auth) return;
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        setView('home'); // Auto-redirect to home if logged in
+        setView('home'); 
       } else {
         setView('auth');
       }
@@ -135,7 +143,6 @@ export default function App() {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Add name to profile
         if (displayName) {
           await updateProfile(userCredential.user, { displayName: displayName });
         }
@@ -146,6 +153,7 @@ export default function App() {
       if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
       if (err.code === 'auth/email-already-in-use') msg = "Email already in use.";
       if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+      if (err.code === 'auth/invalid-api-key') msg = "Invalid API Key. Check config.";
       setAuthError(msg);
     } finally {
       setIsAuthLoading(false);
@@ -222,13 +230,10 @@ export default function App() {
   };
 
   const processResults = (predictions) => {
-    // 1. Fuzzy Match Logic
     const foundItem = predictions.find(p => {
       const className = p.className.toLowerCase();
-      // Check for strict DB key match or fuzzy name match
       return Object.keys(FOOD_DB).some(dbKey => {
          const foodName = FOOD_DB[dbKey].name.toLowerCase().split(' ')[0]; 
-         // Special case for indian breads
          if (dbKey === 'roti' || dbKey === 'chapati' || dbKey === 'naan') {
             if (className.includes('bread') || className.includes('dough')) return true;
          }
@@ -239,13 +244,9 @@ export default function App() {
     if (foundItem) {
       const className = foundItem.className.toLowerCase();
       let matchKey = null;
-
-      // Special handling for bread/dough detection mapping to Roti/Chapati
       if (className.includes('bread') || className.includes('dough')) {
-          // Default to Roti if generic bread is found in Indian context
           matchKey = 'roti'; 
       } else {
-        // Standard loop lookup
         for (const [dbKey, data] of Object.entries(FOOD_DB)) {
             if (className.includes(dbKey) || className.includes(data.name.toLowerCase().split('(')[0].trim())) {
                 matchKey = dbKey;
@@ -253,7 +254,6 @@ export default function App() {
             }
         }
       }
-
       if (matchKey) {
           setResults({ type: 'found', data: FOOD_DB[matchKey], confidence: foundItem.probability });
       } else {
@@ -299,12 +299,10 @@ export default function App() {
     setSearchTerm('');
   };
 
-  // Filter for Search List
   const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
     food.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
-  // --- RENDER: AUTH SCREEN ---
   if (view === 'auth' && !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -313,7 +311,7 @@ export default function App() {
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
               <Zap className="w-8 h-8 text-yellow-300 fill-yellow-300" />
             </div>
-            <h1 className="text-3xl font-bold text-white">GlucoLens Pro</h1>
+            <h1 className="text-3xl font-bold text-white">Glyco Calculator</h1>
             <p className="text-emerald-100 mt-2">Your diabetic food companion</p>
           </div>
 
@@ -391,15 +389,13 @@ export default function App() {
     );
   }
 
-  // --- RENDER: MAIN APP ---
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
-      {/* Header */}
       <header className="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-50">
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
             <Zap className="w-6 h-6 fill-yellow-300 stroke-yellow-300" />
-            <h1 className="text-xl font-bold tracking-tight">GlucoLens</h1>
+            <h1 className="text-xl font-bold tracking-tight">Glyco Calculator</h1>
           </div>
           <div className="flex items-center gap-3">
              <span className="text-xs font-medium bg-emerald-700 px-2 py-1 rounded-full hidden sm:inline-block">
@@ -413,8 +409,6 @@ export default function App() {
       </header>
 
       <main className="max-w-md mx-auto p-4">
-        
-        {/* Loading */}
         {isModelLoading && (
           <div className="flex flex-col items-center justify-center py-20 animate-pulse">
             <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
@@ -422,7 +416,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Home View */}
         {!isModelLoading && view === 'home' && (
           <div className="space-y-6 animate-fade-in">
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 text-center">
@@ -476,7 +469,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Camera View */}
         {view === 'camera' && (
           <div className="fixed inset-0 bg-black z-50 flex flex-col">
             <div className="relative flex-1 bg-black overflow-hidden">
@@ -545,7 +537,6 @@ export default function App() {
           </div>
         )}
 
-        {/* Result View */}
         {view === 'result' && results && (
           <div className="animate-fade-in space-y-4">
             <button onClick={resetApp} className="text-slate-500 flex items-center gap-2 mb-2 hover:text-emerald-600 transition-colors">
