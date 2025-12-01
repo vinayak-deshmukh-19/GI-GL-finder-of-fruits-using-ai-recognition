@@ -472,7 +472,7 @@ export default function App() {
                 <Smartphone className="w-8 h-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Scan Food</h2>
-              <p className="text-slate-500 mb-6">Scan fruits or Indian dishes via camera, or search our database.</p>
+              <p className="text-slate-500 mb-6">Scan Common foods, fruits or Indian dishes via camera, or search our database.</p>
               
               <button 
                 onClick={startCamera}
