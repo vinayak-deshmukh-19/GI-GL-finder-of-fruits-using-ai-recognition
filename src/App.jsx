@@ -9,8 +9,6 @@ import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, si
  * ------------------------------------------------------------------
  * FIREBASE CONFIGURATION
  * ------------------------------------------------------------------
- * Your specific keys are now integrated below.
- * ------------------------------------------------------------------
  */
 const firebaseConfig = {
   apiKey: "AIzaSyB0qsFhnVpqog08HCmUIi7FpkdkV6O09Kc",
@@ -33,10 +31,49 @@ try {
 
 /**
  * ------------------------------------------------------------------
- * MASSIVE FOOD DATABASE
+ * MASSIVE FOOD DATABASE (Fruits + Indian + Common Staples)
  * ------------------------------------------------------------------
  */
 const FOOD_DB = {
+  // --- COMMON STAPLES & PANTRY (New Additions) ---
+  "bread_white": { name: "White Bread", gi: 75, gl: 10, serving: "1 slice", tips: "High GI. Causes rapid spikes. Switch to whole grain." },
+  "bread_wheat": { name: "Whole Wheat Bread", gi: 50, gl: 9, serving: "1 slice", tips: "Better fiber content than white bread. Good choice." },
+  "bread_sourdough": { name: "Sourdough Bread", gi: 54, gl: 8, serving: "1 slice", tips: "Fermentation lowers the GI. Excellent option." },
+  "bagel": { name: "Bagel (White)", gi: 72, gl: 25, serving: "1 medium", tips: "Very dense carb source. High Glycemic Load." },
+  
+  "oats": { name: "Oats (Rolled/Porridge)", gi: 55, gl: 13, serving: "1 cup cooked", tips: "Great source of beta-glucan fiber. Stabilizes sugar." },
+  "cornflakes": { name: "Cornflakes", gi: 81, gl: 21, serving: "1 cup", tips: "Very High GI. Avoid for breakfast if possible." },
+  "egg": { name: "Egg (Boiled/Poached)", gi: 0, gl: 0, serving: "1 large", tips: "Zero GI. Pure protein/fat. Perfect for diabetics." },
+  
+  "milk": { name: "Milk (Whole)", gi: 39, gl: 4, serving: "1 cup", tips: "Low GI but contains natural sugar (lactose)." },
+  "yogurt": { name: "Yogurt (Plain/Greek)", gi: 14, gl: 2, serving: "1 cup", tips: "Excellent low GI snack. Avoid sweetened versions." },
+  "cheese": { name: "Cheese (Cheddar/Mozzarella)", gi: 0, gl: 0, serving: "50g", tips: "No carbs. Good for slowing down sugar absorption of other foods." },
+  "butter": { name: "Butter", gi: 0, gl: 0, serving: "1 tbsp", tips: "Pure fat. Zero GI, but watch calories." },
+
+  "pasta_white": { name: "Pasta (White)", gi: 50, gl: 23, serving: "1 cup cooked", tips: "Cook 'Al Dente' (firm) to keep GI lower." },
+  "pasta_wheat": { name: "Whole Wheat Pasta", gi: 40, gl: 15, serving: "1 cup cooked", tips: "Higher fiber content makes this a safer choice." },
+  "noodles": { name: "Instant Noodles", gi: 50, gl: 20, serving: "1 packet", tips: "Highly processed. Often fried. Eat sparingly." },
+  "quinoa": { name: "Quinoa", gi: 53, gl: 13, serving: "1 cup cooked", tips: "Complete protein and moderate GI. Superfood." },
+
+  "potato_boiled": { name: "Potato (Boiled)", gi: 78, gl: 26, serving: "1 medium", tips: "High GI. Cooling it down (potato salad) lowers GI." },
+  "potato_fries": { name: "French Fries", gi: 75, gl: 22, serving: "1 medium portion", tips: "High fat and carbs. A major spike trigger." },
+  "sweet_potato": { name: "Sweet Potato", gi: 63, gl: 16, serving: "1 medium", tips: "Better than regular potatoes due to fiber and vitamins." },
+  "corn": { name: "Sweet Corn", gi: 52, gl: 14, serving: "1 cup", tips: "Moderate GI. Count as a carb, not a veggie." },
+
+  "lentils": { name: "Lentils (Green/Brown)", gi: 30, gl: 5, serving: "1 cup cooked", tips: "Excellent source of fiber and protein. Very low GI." },
+  "chickpeas": { name: "Chickpeas (Garbanzo)", gi: 28, gl: 8, serving: "1 cup", tips: "Very low GI. Great in salads or hummus." },
+  
+  "almonds": { name: "Almonds", gi: 15, gl: 1, serving: "1 handful", tips: "Great snack. Healthy fats help stabilize blood sugar." },
+  "walnuts": { name: "Walnuts", gi: 15, gl: 1, serving: "1 handful", tips: "Rich in Omega-3s. Zero impact on blood sugar." },
+  "peanuts": { name: "Peanuts", gi: 14, gl: 1, serving: "1 handful", tips: "Very low GI. Watch out for salted/honey-roasted varieties." },
+  "peanut_butter": { name: "Peanut Butter (Natural)", gi: 14, gl: 2, serving: "2 tbsp", tips: "Good fat source. Avoid brands with added sugar." },
+
+  "honey": { name: "Honey", gi: 58, gl: 12, serving: "1 tbsp", tips: "Natural, but it IS sugar. Raises blood glucose quickly." },
+  "sugar": { name: "Sugar (White)", gi: 65, gl: 10, serving: "1 tsp", tips: "Pure sucrose. Minimize intake strictly." },
+  "chocolate_dark": { name: "Dark Chocolate (70%+)", gi: 23, gl: 2, serving: "2 squares", tips: "Low GI treat. High antioxidants." },
+  "popcorn": { name: "Popcorn (Plain)", gi: 65, gl: 6, serving: "1 cup", tips: "High GI but very low density (GL). Safe snack if plain." },
+  "chips": { name: "Potato Chips", gi: 56, gl: 12, serving: "1 small packet", tips: "Processed carbs + fat. Not ideal." },
+
   // --- INDIAN FOODS ---
   "roti": { name: "Roti (Whole Wheat)", gi: 62, gl: 15, serving: "1 medium", tips: "Moderate GI. Eat with dal or sabzi to lower impact." },
   "chapati": { name: "Chapati", gi: 52, gl: 12, serving: "1 medium", tips: "Lower GI than white bread. Good staple." },
@@ -53,6 +90,7 @@ const FOOD_DB = {
   "biryani": { name: "Biryani (Chicken)", gi: 60, gl: 25, serving: "1 cup", tips: "Mixed GI. Rice raises sugar, but chicken/fat slows it down." },
   "naan": { name: "Naan (Butter)", gi: 71, gl: 20, serving: "1 piece", tips: "Refined flour (Maida) causes spikes. Avoid if possible." },
   "rajma": { name: "Rajma (Kidney Beans)", gi: 24, gl: 6, serving: "1 cup", tips: "Excellent low GI choice." },
+  "butter_chicken": { name: "Butter Chicken", gi: 58, gl: 10, serving: "1 small bowl", tips: "High fat slows sugar absorption." },
 
   // --- FRUITS ---
   "acai": { name: "Acai Berry", gi: 15, gl: 1, serving: "100g puree", tips: "Superfood. Very low sugar, high in antioxidants." },
@@ -137,6 +175,12 @@ export default function App() {
     e.preventDefault();
     setAuthError('');
     setIsAuthLoading(true);
+
+    if (firebaseConfig.apiKey === "YOUR_API_KEY_HERE") {
+        setAuthError("ERROR: Database not connected. You must create a Firebase Project (See instructions).");
+        setIsAuthLoading(false);
+        return;
+    }
 
     try {
       if (isLoginMode) {
@@ -234,8 +278,9 @@ export default function App() {
       const className = p.className.toLowerCase();
       return Object.keys(FOOD_DB).some(dbKey => {
          const foodName = FOOD_DB[dbKey].name.toLowerCase().split(' ')[0]; 
-         if (dbKey === 'roti' || dbKey === 'chapati' || dbKey === 'naan') {
-            if (className.includes('bread') || className.includes('dough')) return true;
+         // Custom logic for bread/dough mapping
+         if (dbKey === 'roti' || dbKey === 'chapati' || dbKey === 'naan' || dbKey.includes('bread')) {
+            if (className.includes('bread') || className.includes('dough') || className.includes('bakery')) return true;
          }
          return className.includes(foodName) || className.includes(dbKey.replace('_', ' '));
       });
@@ -244,8 +289,12 @@ export default function App() {
     if (foundItem) {
       const className = foundItem.className.toLowerCase();
       let matchKey = null;
-      if (className.includes('bread') || className.includes('dough')) {
-          matchKey = 'roti'; 
+      
+      // Heuristic for Breads/Dough
+      if (className.includes('bread') || className.includes('dough') || className.includes('bakery')) {
+          // If we detect generic bread, try to default to something common, or ask user (for now default to white bread or roti depending on context)
+          // Since we added western breads, let's default to white bread if generic
+          matchKey = 'bread_white'; 
       } else {
         for (const [dbKey, data] of Object.entries(FOOD_DB)) {
             if (className.includes(dbKey) || className.includes(data.name.toLowerCase().split('(')[0].trim())) {
@@ -439,7 +488,7 @@ export default function App() {
                 <Search className="w-5 h-5 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Search Roti, Rice, Apple..." 
+                  placeholder="Search Bread, Rice, Apple..." 
                   className="bg-transparent w-full outline-none text-slate-700 placeholder:text-slate-400"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
