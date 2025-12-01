@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as mobilenet from 'https://esm.sh/@tensorflow-models/mobilenet';
 import '@tensorflow/tfjs';
-import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft, LogOut, User, Lock, Mail, Loader2 } from 'lucide-react';
+import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft, LogOut, User, Lock, Mail, Loader2, Save, Activity } from 'lucide-react';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
 /**
  * ------------------------------------------------------------------
@@ -21,64 +22,37 @@ const firebaseConfig = {
 };
 
 // Initialize Firebase
-let app, auth;
+let app, auth, db;
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
+  db = getFirestore(app);
 } catch (e) {
   console.error("Firebase init failed:", e);
 }
 
 /**
  * ------------------------------------------------------------------
- * MASSIVE FOOD DATABASE (Fruits + Indian + Common Staples)
+ * MASSIVE FOOD DATABASE
  * ------------------------------------------------------------------
  */
 const FOOD_DB = {
-  // --- COMMON STAPLES & PANTRY (New Additions) ---
+  // --- COMMON STAPLES ---
   "bread_white": { name: "White Bread", gi: 75, gl: 10, serving: "1 slice", tips: "High GI. Causes rapid spikes. Switch to whole grain." },
   "bread_wheat": { name: "Whole Wheat Bread", gi: 50, gl: 9, serving: "1 slice", tips: "Better fiber content than white bread. Good choice." },
   "bread_sourdough": { name: "Sourdough Bread", gi: 54, gl: 8, serving: "1 slice", tips: "Fermentation lowers the GI. Excellent option." },
-  "bagel": { name: "Bagel (White)", gi: 72, gl: 25, serving: "1 medium", tips: "Very dense carb source. High Glycemic Load." },
-  
   "oats": { name: "Oats (Rolled/Porridge)", gi: 55, gl: 13, serving: "1 cup cooked", tips: "Great source of beta-glucan fiber. Stabilizes sugar." },
-  "cornflakes": { name: "Cornflakes", gi: 81, gl: 21, serving: "1 cup", tips: "Very High GI. Avoid for breakfast if possible." },
   "egg": { name: "Egg (Boiled/Poached)", gi: 0, gl: 0, serving: "1 large", tips: "Zero GI. Pure protein/fat. Perfect for diabetics." },
-  
   "milk": { name: "Milk (Whole)", gi: 39, gl: 4, serving: "1 cup", tips: "Low GI but contains natural sugar (lactose)." },
   "yogurt": { name: "Yogurt (Plain/Greek)", gi: 14, gl: 2, serving: "1 cup", tips: "Excellent low GI snack. Avoid sweetened versions." },
-  "cheese": { name: "Cheese (Cheddar/Mozzarella)", gi: 0, gl: 0, serving: "50g", tips: "No carbs. Good for slowing down sugar absorption of other foods." },
-  "butter": { name: "Butter", gi: 0, gl: 0, serving: "1 tbsp", tips: "Pure fat. Zero GI, but watch calories." },
-
+  "cheese": { name: "Cheese", gi: 0, gl: 0, serving: "50g", tips: "No carbs. Good for slowing down sugar absorption." },
+  "rice_white": { name: "White Rice (Cooked)", gi: 73, gl: 43, serving: "1 cup (150g)", tips: "High GI. Watch portions carefully. Pair with fiber/protein." },
+  "rice_brown": { name: "Brown Rice", gi: 68, gl: 23, serving: "1 cup", tips: "Better than white rice due to fiber content." },
   "pasta_white": { name: "Pasta (White)", gi: 50, gl: 23, serving: "1 cup cooked", tips: "Cook 'Al Dente' (firm) to keep GI lower." },
-  "pasta_wheat": { name: "Whole Wheat Pasta", gi: 40, gl: 15, serving: "1 cup cooked", tips: "Higher fiber content makes this a safer choice." },
-  "noodles": { name: "Instant Noodles", gi: 50, gl: 20, serving: "1 packet", tips: "Highly processed. Often fried. Eat sparingly." },
-  "quinoa": { name: "Quinoa", gi: 53, gl: 13, serving: "1 cup cooked", tips: "Complete protein and moderate GI. Superfood." },
-
-  "potato_boiled": { name: "Potato (Boiled)", gi: 78, gl: 26, serving: "1 medium", tips: "High GI. Cooling it down (potato salad) lowers GI." },
-  "potato_fries": { name: "French Fries", gi: 75, gl: 22, serving: "1 medium portion", tips: "High fat and carbs. A major spike trigger." },
-  "sweet_potato": { name: "Sweet Potato", gi: 63, gl: 16, serving: "1 medium", tips: "Better than regular potatoes due to fiber and vitamins." },
-  "corn": { name: "Sweet Corn", gi: 52, gl: 14, serving: "1 cup", tips: "Moderate GI. Count as a carb, not a veggie." },
-
-  "lentils": { name: "Lentils (Green/Brown)", gi: 30, gl: 5, serving: "1 cup cooked", tips: "Excellent source of fiber and protein. Very low GI." },
-  "chickpeas": { name: "Chickpeas (Garbanzo)", gi: 28, gl: 8, serving: "1 cup", tips: "Very low GI. Great in salads or hummus." },
   
-  "almonds": { name: "Almonds", gi: 15, gl: 1, serving: "1 handful", tips: "Great snack. Healthy fats help stabilize blood sugar." },
-  "walnuts": { name: "Walnuts", gi: 15, gl: 1, serving: "1 handful", tips: "Rich in Omega-3s. Zero impact on blood sugar." },
-  "peanuts": { name: "Peanuts", gi: 14, gl: 1, serving: "1 handful", tips: "Very low GI. Watch out for salted/honey-roasted varieties." },
-  "peanut_butter": { name: "Peanut Butter (Natural)", gi: 14, gl: 2, serving: "2 tbsp", tips: "Good fat source. Avoid brands with added sugar." },
-
-  "honey": { name: "Honey", gi: 58, gl: 12, serving: "1 tbsp", tips: "Natural, but it IS sugar. Raises blood glucose quickly." },
-  "sugar": { name: "Sugar (White)", gi: 65, gl: 10, serving: "1 tsp", tips: "Pure sucrose. Minimize intake strictly." },
-  "chocolate_dark": { name: "Dark Chocolate (70%+)", gi: 23, gl: 2, serving: "2 squares", tips: "Low GI treat. High antioxidants." },
-  "popcorn": { name: "Popcorn (Plain)", gi: 65, gl: 6, serving: "1 cup", tips: "High GI but very low density (GL). Safe snack if plain." },
-  "chips": { name: "Potato Chips", gi: 56, gl: 12, serving: "1 small packet", tips: "Processed carbs + fat. Not ideal." },
-
   // --- INDIAN FOODS ---
   "roti": { name: "Roti (Whole Wheat)", gi: 62, gl: 15, serving: "1 medium", tips: "Moderate GI. Eat with dal or sabzi to lower impact." },
   "chapati": { name: "Chapati", gi: 52, gl: 12, serving: "1 medium", tips: "Lower GI than white bread. Good staple." },
-  "rice_white": { name: "White Rice (Cooked)", gi: 73, gl: 43, serving: "1 cup (150g)", tips: "High GI. Watch portions carefully. Pair with fiber/protein." },
-  "rice_brown": { name: "Brown Rice", gi: 68, gl: 23, serving: "1 cup", tips: "Better than white rice due to fiber content." },
   "dal": { name: "Dal (Lentil Curry)", gi: 29, gl: 5, serving: "1 bowl", tips: "Excellent! Very low GI and high protein." },
   "idli": { name: "Idli", gi: 60, gl: 12, serving: "2 pieces", tips: "Steamed and healthy, but moderate GI due to rice." },
   "dosa": { name: "Dosa (Plain)", gi: 77, gl: 20, serving: "1 medium", tips: "High GI. Masala dosa (with potato) is even higher." },
@@ -93,39 +67,13 @@ const FOOD_DB = {
   "butter_chicken": { name: "Butter Chicken", gi: 58, gl: 10, serving: "1 small bowl", tips: "High fat slows sugar absorption." },
 
   // --- FRUITS ---
-  "acai": { name: "Acai Berry", gi: 15, gl: 1, serving: "100g puree", tips: "Superfood. Very low sugar, high in antioxidants." },
-  "apple": { name: "Apple (Red/Golden)", gi: 36, gl: 6, serving: "1 medium (138g)", tips: "Always eat with skin for fiber." },
-  "apple_green": { name: "Apple (Granny Smith)", gi: 30, gl: 5, serving: "1 medium", tips: "The best apple choice for diabetics due to lower sugar." },
-  "apricot": { name: "Apricot (Fresh)", gi: 34, gl: 3, serving: "3 small", tips: "Great low-GI snack." },
-  "avocado": { name: "Avocado", gi: 15, gl: 0, serving: "1/2 fruit", tips: "Healthy fats. Virtually no impact on blood sugar." },
-  "banana": { name: "Banana (Yellow/Ripe)", gi: 51, gl: 13, serving: "1 medium", tips: "Moderate. Eat with nuts to slow absorption." },
-  "blackberry": { name: "Blackberry", gi: 25, gl: 2, serving: "1 cup", tips: "Excellent. High fiber and low sugar." },
-  "blueberry": { name: "Blueberry", gi: 53, gl: 5, serving: "1 cup", tips: "Superfood for insulin sensitivity." },
-  "cantaloupe": { name: "Cantaloupe", gi: 65, gl: 4, serving: "1 cup cubes", tips: "High GI but low GL (mostly water). Safe in moderation." },
-  "cherry": { name: "Cherry (Sweet)", gi: 25, gl: 4, serving: "1 cup", tips: "Contains anthocyanins which may boost insulin." },
-  "coconut": { name: "Coconut (Meat)", gi: 45, gl: 5, serving: "1 piece (45g)", tips: "High fat slows sugar absorption." },
-  "date_fresh": { name: "Date (Fresh)", gi: 42, gl: 14, serving: "5 dates", tips: "Better than dried, but still sugar-dense." },
-  "dragon_fruit": { name: "Dragon Fruit", gi: 50, gl: 5, serving: "1 fruit", tips: "Low sugar impact. Seeds provide healthy fats." },
-  "fig_fresh": { name: "Fig (Fresh)", gi: 35, gl: 4, serving: "2 medium", tips: "High fiber helps regulate blood sugar." },
-  "grape_green": { name: "Grape (Green)", gi: 53, gl: 5, serving: "1 cup", tips: "Monitor portion. Easy to overeat." },
-  "grapefruit": { name: "Grapefruit", gi: 25, gl: 3, serving: "1/2 fruit", tips: "Check medication interactions. Excellent GI." },
-  "guava": { name: "Guava", gi: 12, gl: 2, serving: "1 fruit", tips: "Top Tier: Very low GI and extremely high fiber." },
-  "kiwi": { name: "Kiwi", gi: 50, gl: 7, serving: "1 fruit", tips: "Skin is edible and adds massive fiber." },
-  "lemon": { name: "Lemon", gi: 20, gl: 2, serving: "1 fruit", tips: "Use juice to lower GI of meals." },
-  "lime": { name: "Lime", gi: 20, gl: 1, serving: "1 fruit", tips: "Negligible sugar. Great for flavoring." },
-  "mango": { name: "Mango", gi: 51, gl: 8, serving: "1 cup sliced", tips: "Borderline. Always eat with protein (nuts/yogurt)." },
+  "apple": { name: "Apple", gi: 36, gl: 6, serving: "1 medium", tips: "Always eat with skin for fiber." },
+  "banana": { name: "Banana", gi: 51, gl: 13, serving: "1 medium", tips: "Moderate. Eat with nuts to slow absorption." },
   "orange": { name: "Orange", gi: 43, gl: 5, serving: "1 medium", tips: "Avoid juice. Eat the whole fruit." },
+  "mango": { name: "Mango", gi: 51, gl: 8, serving: "1 cup sliced", tips: "Borderline. Always eat with protein (nuts/yogurt)." },
+  "watermelon": { name: "Watermelon", gi: 72, gl: 5, serving: "1 cup", tips: "High GI, Low GL. Don't eat alone." },
   "papaya": { name: "Papaya", gi: 60, gl: 9, serving: "1 cup", tips: "Medium GI. Digestive enzymes help metabolism." },
-  "passion_fruit": { name: "Passion Fruit", gi: 30, gl: 5, serving: "4 fruits", tips: "Seeds are pure fiber. Very low GI." },
-  "peach": { name: "Peach (Fresh)", gi: 42, gl: 5, serving: "1 medium", tips: "Low GI. Great summer fruit." },
-  "pear": { name: "Pear", gi: 38, gl: 4, serving: "1 medium", tips: "Eat with skin. One of the highest fiber fruits." },
-  "pineapple": { name: "Pineapple", gi: 59, gl: 7, serving: "1 cup", tips: "Medium GI. Eat in moderation." },
-  "plum": { name: "Plum", gi: 40, gl: 2, serving: "1 fruit", tips: "Low calorie and low GI." },
-  "pomegranate": { name: "Pomegranate", gi: 53, gl: 18, serving: "1/2 cup arils", tips: "High GL per cup, but very healthy in small amounts." },
-  "raspberry": { name: "Raspberry", gi: 26, gl: 2, serving: "1 cup", tips: "Excellent choice. Very high fiber." },
-  "strawberry": { name: "Strawberry", gi: 40, gl: 3, serving: "1 cup", tips: "Berries are the best class of fruit for diabetics." },
-  "tangerine": { name: "Tangerine", gi: 47, gl: 4, serving: "1 medium", tips: "Good portion control." },
-  "watermelon": { name: "Watermelon", gi: 72, gl: 5, serving: "1 cup", tips: "High GI, Low GL. Don't eat alone, eat with cheese/nuts." },
+  "grape": { name: "Grapes", gi: 53, gl: 5, serving: "1 cup", tips: "Monitor portion. Easy to overeat." },
 };
 
 // --- Helper Functions ---
@@ -142,10 +90,10 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState(null);
-  const [view, setView] = useState('auth'); // Default to auth
+  const [view, setView] = useState('auth'); 
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Auth State
+  // Auth & Profile State
   const [user, setUser] = useState(null);
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [email, setEmail] = useState('');
@@ -153,16 +101,35 @@ export default function App() {
   const [displayName, setDisplayName] = useState('');
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
+  
+  // Profile Data
+  const [profile, setProfile] = useState({
+    age: '',
+    diabetesType: 'Type 2',
+    activityLevel: 'Light',
+    dailyGLTarget: 100 // Default
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // --- AUTH LISTENERS & LOGIC ---
+  // --- AUTH LISTENERS ---
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
+        // Fetch profile from Firestore
+        try {
+          const docRef = doc(db, "users", currentUser.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            setProfile(docSnap.data());
+          }
+        } catch (err) {
+          console.error("Error fetching profile:", err);
+        }
         setView('home'); 
       } else {
         setView('auth');
@@ -171,16 +138,54 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
+  // --- PROFILE LOGIC ---
+  const calculateGLTarget = (type, activity) => {
+    let baseGL = 100;
+    
+    // 1. Base on Condition
+    if (type === 'Type 1') baseGL = 80; // Stricter
+    else if (type === 'Type 2') baseGL = 100; // Moderate
+    else if (type === 'Pre-diabetic') baseGL = 110;
+    else if (type === 'Non-diabetic') baseGL = 130;
+
+    // 2. Adjust for Activity
+    if (activity === 'Sedentary (0 days)') baseGL += 0;
+    else if (activity === 'Light (1-3 days)') baseGL += 15;
+    else if (activity === 'Moderate (3-5 days)') baseGL += 30;
+    else if (activity === 'Very Active (6-7 days)') baseGL += 45;
+
+    return baseGL;
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    
+    const target = calculateGLTarget(profile.diabetesType, profile.activityLevel);
+    const newProfile = { ...profile, dailyGLTarget: target };
+    setProfile(newProfile);
+
+    try {
+      if (user) {
+        await setDoc(doc(db, "users", user.uid), newProfile);
+        alert(`Profile Saved! Your recommended Daily GL Target is: ${target}`);
+        setView('home');
+      }
+    } catch (err) {
+      console.error("Error saving profile:", err);
+      // Fallback for demo if Firestore isn't enabled
+      alert(`Profile saved locally (Enable Firestore to save permanently). Your Target GL: ${target}`);
+      setView('home');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // --- AUTH HANDLERS ---
   const handleAuth = async (e) => {
     e.preventDefault();
     setAuthError('');
     setIsAuthLoading(true);
-
-    if (firebaseConfig.apiKey === "YOUR_API_KEY_HERE") {
-        setAuthError("ERROR: Database not connected. You must create a Firebase Project (See instructions).");
-        setIsAuthLoading(false);
-        return;
-    }
 
     try {
       if (isLoginMode) {
@@ -193,12 +198,7 @@ export default function App() {
       }
     } catch (err) {
       console.error(err);
-      let msg = "Authentication failed.";
-      if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
-      if (err.code === 'auth/email-already-in-use') msg = "Email already in use.";
-      if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
-      if (err.code === 'auth/invalid-api-key') msg = "Invalid API Key. Check config.";
-      setAuthError(msg);
+      setAuthError(err.message);
     } finally {
       setIsAuthLoading(false);
     }
@@ -215,7 +215,7 @@ export default function App() {
     }
   };
 
-  // --- MODEL LOADING ---
+  // --- AI MODEL ---
   useEffect(() => {
     async function loadModel() {
       try {
@@ -230,7 +230,7 @@ export default function App() {
     loadModel();
   }, []);
 
-  // --- CAMERA & AI LOGIC ---
+  // --- CAMERA LOGIC ---
   const startCamera = async () => {
     setView('camera');
     setCameraError(null);
@@ -250,16 +250,9 @@ export default function App() {
     }
   };
 
-  const stopCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      videoRef.current.srcObject.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-  };
-
   const identify = async (imgElement) => {
     if (!model) {
-        alert("AI Model is still loading. Please wait a moment and try again.");
+        alert("AI Model is still loading...");
         return;
     }
     setIsScanning(true);
@@ -278,7 +271,6 @@ export default function App() {
       const className = p.className.toLowerCase();
       return Object.keys(FOOD_DB).some(dbKey => {
          const foodName = FOOD_DB[dbKey].name.toLowerCase().split(' ')[0]; 
-         // Custom logic for bread/dough mapping
          if (dbKey === 'roti' || dbKey === 'chapati' || dbKey === 'naan' || dbKey.includes('bread')) {
             if (className.includes('bread') || className.includes('dough') || className.includes('bakery')) return true;
          }
@@ -289,11 +281,7 @@ export default function App() {
     if (foundItem) {
       const className = foundItem.className.toLowerCase();
       let matchKey = null;
-      
-      // Heuristic for Breads/Dough
       if (className.includes('bread') || className.includes('dough') || className.includes('bakery')) {
-          // If we detect generic bread, try to default to something common, or ask user (for now default to white bread or roti depending on context)
-          // Since we added western breads, let's default to white bread if generic
           matchKey = 'bread_white'; 
       } else {
         for (const [dbKey, data] of Object.entries(FOOD_DB)) {
@@ -312,15 +300,11 @@ export default function App() {
       setResults({ type: 'unknown', raw: predictions[0].className });
     }
     setView('result');
-    stopCamera();
   };
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current) {
-      if (!model) {
-        alert("AI is still loading... please wait 2 seconds.");
-        return;
-      }
+      if (!model) { alert("AI loading..."); return; }
       const video = videoRef.current;
       const canvas = canvasRef.current;
       canvas.width = video.videoWidth;
@@ -340,18 +324,7 @@ export default function App() {
     setView('result');
   };
 
-  const resetApp = () => {
-    setImageURL(null);
-    setResults(null);
-    setView('home');
-    stopCamera();
-    setSearchTerm('');
-  };
-
-  const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
-    food.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => a[1].name.localeCompare(b[1].name));
-
+  // --- VIEWS ---
   if (view === 'auth' && !user) {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
@@ -363,93 +336,102 @@ export default function App() {
             <h1 className="text-3xl font-bold text-white">Glyco Calculator</h1>
             <p className="text-emerald-100 mt-2">Your diabetic food companion</p>
           </div>
-
           <div className="p-8">
-            <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">
-              {isLoginMode ? 'Welcome Back' : 'Create Account'}
-            </h2>
-
-            {authError && (
-              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
-                <AlertCircle className="w-4 h-4" />
-                {authError}
-              </div>
-            )}
-
+            <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
+            {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2"><AlertCircle className="w-4 h-4" />{authError}</div>}
             <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && (
-                <div className="relative">
-                  <User className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
-                  <input 
-                    type="text" 
-                    placeholder="Full Name"
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
-                    value={displayName}
-                    onChange={(e) => setDisplayName(e.target.value)}
-                    required
-                  />
-                </div>
-              )}
-              
-              <div className="relative">
-                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
-                <input 
-                  type="email" 
-                  placeholder="Email Address"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="relative">
-                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
-                <input 
-                  type="password" 
-                  placeholder="Password"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={isAuthLoading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-200 flex items-center justify-center"
-              >
-                {isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLoginMode ? 'Sign In' : 'Sign Up')}
-              </button>
+              {!isLoginMode && <div className="relative"><User className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="text" placeholder="Full Name" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></div>}
+              <div className="relative"><Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="email" placeholder="Email Address" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
+              <div className="relative"><Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="password" placeholder="Password" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
+              <button type="submit" disabled={isAuthLoading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center">{isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLoginMode ? 'Sign In' : 'Sign Up')}</button>
             </form>
-
-            <div className="mt-6 text-center">
-              <button 
-                onClick={() => setIsLoginMode(!isLoginMode)}
-                className="text-slate-500 text-sm hover:text-emerald-600 font-medium"
-              >
-                {isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
-              </button>
-            </div>
+            <div className="mt-6 text-center"><button onClick={() => setIsLoginMode(!isLoginMode)} className="text-slate-500 text-sm hover:text-emerald-600 font-medium">{isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}</button></div>
           </div>
         </div>
       </div>
     );
   }
 
+  // --- PROFILE VIEW ---
+  if (view === 'profile') {
+    return (
+      <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
+        <header className="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-50 flex items-center gap-3">
+          <button onClick={() => setView('home')}><ArrowLeft className="w-6 h-6" /></button>
+          <h1 className="text-xl font-bold">My Profile</h1>
+        </header>
+        <main className="max-w-md mx-auto p-4">
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 mb-6">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600 text-2xl font-bold">
+                {user?.displayName?.charAt(0) || "U"}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">{user?.displayName || "User"}</h2>
+                <p className="text-slate-500 text-sm">{user?.email}</p>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveProfile} className="space-y-6">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Age</label>
+                <input type="number" placeholder="e.g. 45" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={profile.age} onChange={(e) => setProfile({...profile, age: e.target.value})} required />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Diabetes Condition</label>
+                <div className="grid grid-cols-2 gap-3">
+                  {['Type 1', 'Type 2', 'Pre-diabetic', 'Non-diabetic'].map((type) => (
+                    <button key={type} type="button" onClick={() => setProfile({...profile, diabetesType: type})} className={`p-3 rounded-xl border text-sm font-medium transition-all ${profile.diabetesType === type ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>{type}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Activity Level</label>
+                <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={profile.activityLevel} onChange={(e) => setProfile({...profile, activityLevel: e.target.value})}>
+                  <option value="Sedentary (0 days)">Sedentary (Little/No Exercise)</option>
+                  <option value="Light (1-3 days)">Light (1-3 days/week)</option>
+                  <option value="Moderate (3-5 days)">Moderate (3-5 days/week)</option>
+                  <option value="Very Active (6-7 days)">Very Active (6-7 days/week)</option>
+                </select>
+              </div>
+
+              <div className="bg-blue-50 p-4 rounded-xl flex items-start gap-3">
+                <Info className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                <p className="text-sm text-blue-800">Based on your selection, we will calculate a recommended Daily Glycemic Load limit for you.</p>
+              </div>
+
+              <button type="submit" disabled={isSavingProfile} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-2">
+                {isSavingProfile ? <Loader2 className="w-5 h-5 animate-spin" /> : <><Save className="w-5 h-5" /> Save Profile</>}
+              </button>
+            </form>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  // --- HOME VIEW ---
+  const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
+    food.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
       <header className="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-50">
         <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setView('home'); setResults(null); setImageURL(null); }}>
             <Zap className="w-6 h-6 fill-yellow-300 stroke-yellow-300" />
             <h1 className="text-xl font-bold tracking-tight">Glyco Calculator</h1>
           </div>
           <div className="flex items-center gap-3">
-             <span className="text-xs font-medium bg-emerald-700 px-2 py-1 rounded-full hidden sm:inline-block">
-               {user?.displayName || user?.email?.split('@')[0]}
-             </span>
+             <button onClick={() => setView('profile')} className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 rounded-full transition-colors">
+               <User className="w-4 h-4 text-white" />
+               <span className="text-xs font-medium text-white hidden sm:inline-block">
+                 {user?.displayName || "Profile"}
+               </span>
+             </button>
              <button onClick={handleSignOut} title="Sign Out">
                <LogOut className="w-5 h-5 text-emerald-100 hover:text-white" />
              </button>
@@ -458,10 +440,20 @@ export default function App() {
       </header>
 
       <main className="max-w-md mx-auto p-4">
-        {isModelLoading && (
-          <div className="flex flex-col items-center justify-center py-20 animate-pulse">
-            <RefreshCw className="w-12 h-12 text-emerald-500 animate-spin mb-4" />
-            <p className="text-slate-500 font-medium">Loading AI Database...</p>
+        {/* DAILY GL TARGET CARD */}
+        {view === 'home' && profile.dailyGLTarget > 0 && (
+          <div className="mb-6 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+            <Activity className="absolute right-[-10px] bottom-[-10px] w-24 h-24 text-white/10" />
+            <p className="text-blue-100 text-sm font-medium mb-1">Your Recommended Limit</p>
+            <div className="flex items-baseline gap-2">
+              <h3 className="text-4xl font-bold">{profile.dailyGLTarget}</h3>
+              <span className="text-sm opacity-80">Daily Glycemic Load</span>
+            </div>
+            <div className="mt-4 flex gap-2 text-xs bg-white/20 p-2 rounded-lg inline-flex backdrop-blur-sm">
+              <span>Type: {profile.diabetesType}</span>
+              <span>•</span>
+              <span>{profile.activityLevel.split(' ')[0]} Active</span>
+            </div>
           </div>
         )}
 
@@ -472,41 +464,25 @@ export default function App() {
                 <Smartphone className="w-8 h-8 text-emerald-600" />
               </div>
               <h2 className="text-2xl font-bold text-slate-800 mb-2">Scan Food</h2>
-              <p className="text-slate-500 mb-6">Scan Common foods, fruits or Indian dishes via camera, or search our database.</p>
+              <p className="text-slate-500 mb-6">Scan fruits or Indian dishes via camera, or search our database.</p>
               
-              <button 
-                onClick={startCamera}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-200"
-              >
-                <Camera className="w-6 h-6" />
-                Start Scanner
+              <button onClick={startCamera} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-emerald-200">
+                <Camera className="w-6 h-6" /> Start Scanner
               </button>
             </div>
 
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
               <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center gap-2 sticky top-0">
                 <Search className="w-5 h-5 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="Search Bread, Rice, Apple..." 
-                  className="bg-transparent w-full outline-none text-slate-700 placeholder:text-slate-400"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <input type="text" placeholder="Search Roti, Rice, Apple..." className="bg-transparent w-full outline-none text-slate-700 placeholder:text-slate-400" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
               <div className="max-h-[500px] overflow-y-auto">
                 {filteredFoods.map(([key, food]) => (
-                  <button 
-                    key={key}
-                    onClick={() => handleManualSelect(key)}
-                    className="w-full text-left p-4 hover:bg-emerald-50 border-b border-slate-50 last:border-0 flex items-center justify-between group"
-                  >
+                  <button key={key} onClick={() => handleManualSelect(key)} className="w-full text-left p-4 hover:bg-emerald-50 border-b border-slate-50 last:border-0 flex items-center justify-between group">
                     <div>
                       <span className="font-medium text-slate-700">{food.name}</span>
                       <div className="flex gap-2 mt-1 text-xs">
-                        <span className={`px-2 py-0.5 rounded-full ${getGILevel(food.gi).bg} ${getGILevel(food.gi).color}`}>
-                          GI: {food.gi}
-                        </span>
+                        <span className={`px-2 py-0.5 rounded-full ${getGILevel(food.gi).bg} ${getGILevel(food.gi).color}`}>GI: {food.gi}</span>
                         <span className="text-slate-400">GL: {food.gl}</span>
                       </div>
                     </div>
@@ -522,41 +498,19 @@ export default function App() {
           <div className="fixed inset-0 bg-black z-50 flex flex-col">
             <div className="relative flex-1 bg-black overflow-hidden">
               <div className="absolute top-0 left-0 right-0 p-4 z-20 flex justify-between items-start bg-gradient-to-b from-black/50 to-transparent">
-                 <button onClick={resetApp} className="text-white p-2 bg-black/30 rounded-full backdrop-blur-md">
-                   <ArrowLeft className="w-6 h-6" />
-                 </button>
+                 <button onClick={resetApp} className="text-white p-2 bg-black/30 rounded-full backdrop-blur-md"><ArrowLeft className="w-6 h-6" /></button>
               </div>
-
               {cameraError ? (
                 <div className="h-full flex flex-col items-center justify-center p-6 text-center">
                   <AlertCircle className="w-16 h-16 text-red-500 mb-4" />
                   <p className="text-white text-lg mb-6">{cameraError}</p>
-                  <button onClick={() => document.getElementById('file-upload').click()} className="bg-white text-black px-6 py-3 rounded-lg font-medium">
-                    Upload Photo Instead
-                  </button>
-                  <input id="file-upload" type="file" accept="image/*" className="hidden" 
-                    onChange={(e) => {
-                      if(e.target.files[0]) {
-                        const url = URL.createObjectURL(e.target.files[0]);
-                        setImageURL(url);
-                        const img = new Image();
-                        img.src = url;
-                        img.onload = () => identify(img);
-                      }
-                    }} 
-                  />
+                  <button onClick={() => document.getElementById('file-upload').click()} className="bg-white text-black px-6 py-3 rounded-lg font-medium">Upload Photo Instead</button>
+                  <input id="file-upload" type="file" accept="image/*" className="hidden" onChange={(e) => { if(e.target.files[0]) { const url = URL.createObjectURL(e.target.files[0]); setImageURL(url); const img = new Image(); img.src = url; img.onload = () => identify(img); } }} />
                 </div>
               ) : (
                 <div className="relative w-full h-full" onClick={captureImage}>
-                    <video 
-                      ref={videoRef} 
-                      autoPlay 
-                      playsInline 
-                      muted 
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
+                    <video ref={videoRef} autoPlay playsInline muted className="absolute inset-0 w-full h-full object-cover" />
                     <canvas ref={canvasRef} className="hidden" />
-                    
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                       <div className="w-64 h-64 border-2 border-white/50 rounded-2xl relative">
                         <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500 -mt-1 -ml-1 rounded-tl-xl"></div>
@@ -564,96 +518,42 @@ export default function App() {
                         <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-emerald-500 -mb-1 -ml-1 rounded-bl-xl"></div>
                         <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-emerald-500 -mb-1 -mr-1 rounded-br-xl"></div>
                       </div>
-                      <p className="absolute bottom-32 text-white/80 font-medium bg-black/30 px-4 py-1 rounded-full backdrop-blur-md">
-                        Tap anywhere to scan
-                      </p>
+                      <p className="absolute bottom-32 text-white/80 font-medium bg-black/30 px-4 py-1 rounded-full backdrop-blur-md">Tap anywhere to scan</p>
                     </div>
                 </div>
               )}
             </div>
-
-            {!cameraError && (
-              <div className="bg-black p-8 flex justify-center items-center pb-12">
-                 <button 
-                  onClick={captureImage}
-                  disabled={isScanning}
-                  className="w-20 h-20 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center active:scale-95 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-                >
-                  {isScanning ? <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" /> : <div className="w-16 h-16 bg-white rounded-full border-2 border-black" />}
-                </button>
-              </div>
-            )}
+            {!cameraError && <div className="bg-black p-8 flex justify-center items-center pb-12"><button onClick={captureImage} disabled={isScanning} className="w-20 h-20 rounded-full bg-white border-4 border-slate-300 flex items-center justify-center active:scale-95 transition-transform shadow-[0_0_20px_rgba(255,255,255,0.3)]">{isScanning ? <RefreshCw className="w-8 h-8 text-emerald-600 animate-spin" /> : <div className="w-16 h-16 bg-white rounded-full border-2 border-black" />}</button></div>}
           </div>
         )}
 
         {view === 'result' && results && (
           <div className="animate-fade-in space-y-4">
-            <button onClick={resetApp} className="text-slate-500 flex items-center gap-2 mb-2 hover:text-emerald-600 transition-colors">
-              <ArrowLeft className="w-5 h-5" /> Back to Scanner
-            </button>
-
-            {imageURL && (
-              <div className="w-full h-48 bg-slate-200 rounded-2xl overflow-hidden shadow-inner relative">
-                <img src={imageURL} alt="Scanned" className="w-full h-full object-cover" />
-              </div>
-            )}
-
+            <button onClick={resetApp} className="text-slate-500 flex items-center gap-2 mb-2 hover:text-emerald-600 transition-colors"><ArrowLeft className="w-5 h-5" /> Back to Scanner</button>
+            {imageURL && <div className="w-full h-48 bg-slate-200 rounded-2xl overflow-hidden shadow-inner relative"><img src={imageURL} alt="Scanned" className="w-full h-full object-cover" /></div>}
             {results.type === 'found' ? (
               <div className={`bg-white rounded-3xl p-6 shadow-sm border-2 ${getGILevel(results.data.gi).border}`}>
                 <div className="flex items-start justify-between mb-6">
-                  <div>
-                    <span className="inline-block px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Analyzed</span>
-                    <h2 className="text-2xl font-bold text-slate-800 leading-tight">{results.data.name}</h2>
-                  </div>
+                  <div><span className="inline-block px-3 py-1 rounded-full bg-slate-100 text-slate-500 text-xs font-bold uppercase tracking-wider mb-2">Analyzed</span><h2 className="text-2xl font-bold text-slate-800 leading-tight">{results.data.name}</h2></div>
                   {React.createElement(getGILevel(results.data.gi).icon, { className: `w-12 h-12 ${getGILevel(results.data.gi).color}` })}
                 </div>
-
                 <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className={`p-4 rounded-2xl ${getGILevel(results.data.gi).bg} bg-opacity-50`}>
-                    <p className="text-sm text-slate-500 mb-1">Glycemic Index</p>
-                    <p className={`text-3xl font-bold ${getGILevel(results.data.gi).color}`}>{results.data.gi}</p>
-                    <p className="text-xs font-medium text-slate-600 mt-1">{getGILevel(results.data.gi).label}</p>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-slate-50">
-                    <p className="text-sm text-slate-500 mb-1">Glycemic Load</p>
-                    <p className="text-3xl font-bold text-slate-700">{results.data.gl}</p>
-                    <p className="text-xs font-medium text-slate-400 mt-1">Per serving</p>
-                  </div>
+                  <div className={`p-4 rounded-2xl ${getGILevel(results.data.gi).bg} bg-opacity-50`}><p className="text-sm text-slate-500 mb-1">Glycemic Index</p><p className={`text-3xl font-bold ${getGILevel(results.data.gi).color}`}>{results.data.gi}</p><p className="text-xs font-medium text-slate-600 mt-1">{getGILevel(results.data.gi).label}</p></div>
+                  <div className="p-4 rounded-2xl bg-slate-50"><p className="text-sm text-slate-500 mb-1">Glycemic Load</p><p className="text-3xl font-bold text-slate-700">{results.data.gl}</p><p className="text-xs font-medium text-slate-400 mt-1">Per serving</p></div>
                 </div>
-
                 <div className="space-y-3">
-                  <div className="p-3 bg-blue-50 text-blue-800 rounded-xl text-sm flex gap-3 items-start">
-                    <Info className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block text-xs uppercase tracking-wider mb-1 text-blue-400">Serving Size</span>
-                      {results.data.serving}
-                    </div>
-                  </div>
-                  <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-sm flex gap-3 items-start">
-                    <Zap className="w-5 h-5 shrink-0 mt-0.5" />
-                    <div>
-                      <span className="font-bold block text-xs uppercase tracking-wider mb-1 text-amber-400">Diabetic Tip</span>
-                      {results.data.tips}
-                    </div>
-                  </div>
+                  <div className="p-3 bg-blue-50 text-blue-800 rounded-xl text-sm flex gap-3 items-start"><Info className="w-5 h-5 shrink-0 mt-0.5" /><div><span className="font-bold block text-xs uppercase tracking-wider mb-1 text-blue-400">Serving Size</span>{results.data.serving}</div></div>
+                  <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-sm flex gap-3 items-start"><Zap className="w-5 h-5 shrink-0 mt-0.5" /><div><span className="font-bold block text-xs uppercase tracking-wider mb-1 text-amber-400">Diabetic Tip</span>{results.data.tips}</div></div>
                 </div>
               </div>
             ) : (
               <div className="bg-white rounded-2xl p-8 text-center shadow-sm border border-slate-100">
-                <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-slate-800 mb-2">Not Recognized</h3>
-                <p className="text-slate-500 mb-6">
-                  AI detected: <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{results.raw}</span>.
-                  <br/>We couldn't confirm this in our database.
-                </p>
-                <button onClick={() => { setView('home'); setSearchTerm(''); }} className="text-emerald-600 font-bold hover:underline">
-                  Search Database Instead
-                </button>
+                <AlertCircle className="w-12 h-12 text-slate-300 mx-auto mb-4" /><h3 className="text-xl font-bold text-slate-800 mb-2">Not Recognized</h3><p className="text-slate-500 mb-6">AI detected: <span className="font-mono bg-slate-100 px-1 rounded text-slate-700">{results.raw}</span>.<br/>We couldn't confirm this in our database.</p>
+                <button onClick={() => { setView('home'); setSearchTerm(''); }} className="text-emerald-600 font-bold hover:underline">Search Database Instead</button>
               </div>
             )}
           </div>
         )}
-
       </main>
     </div>
   );
