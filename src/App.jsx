@@ -1,14 +1,53 @@
 import React, { useState, useEffect, useRef } from 'react';
-import * as mobilenet from '@tensorflow-models/mobilenet';
+import * as mobilenet from 'https://esm.sh/@tensorflow-models/mobilenet';
 import '@tensorflow/tfjs';
-import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft, LogOut, User, Lock, Mail, Loader2 } from 'lucide-react';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
 /**
  * ------------------------------------------------------------------
- * MASSIVE FRUIT DATABASE (A-Z)
+ * FIREBASE CONFIGURATION & INITIALIZATION
  * ------------------------------------------------------------------
  */
-const FRUIT_DB = {
+// In a real deployed app, you would replace these with your own Firebase config keys.
+// For this preview, we use the environment's provided config if available.
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "your-app.firebaseapp.com",
+  projectId: "your-app",
+  storageBucket: "your-app.appspot.com",
+  messagingSenderId: "123456789",
+  appId: "1:123456789:web:abcdef"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+/**
+ * ------------------------------------------------------------------
+ * MASSIVE FOOD DATABASE (Fruits + Indian Foods)
+ * ------------------------------------------------------------------
+ */
+const FOOD_DB = {
+  // --- INDIAN FOODS ---
+  "roti": { name: "Roti (Whole Wheat)", gi: 62, gl: 15, serving: "1 medium", tips: "Moderate GI. Eat with dal or sabzi to lower impact." },
+  "chapati": { name: "Chapati", gi: 52, gl: 12, serving: "1 medium", tips: "Lower GI than white bread. Good staple." },
+  "rice_white": { name: "White Rice (Cooked)", gi: 73, gl: 43, serving: "1 cup (150g)", tips: "High GI. Watch portions carefully. Pair with fiber/protein." },
+  "rice_brown": { name: "Brown Rice", gi: 68, gl: 23, serving: "1 cup", tips: "Better than white rice due to fiber content." },
+  "dal": { name: "Dal (Lentil Curry)", gi: 29, gl: 5, serving: "1 bowl", tips: "Excellent! Very low GI and high protein." },
+  "idli": { name: "Idli", gi: 60, gl: 12, serving: "2 pieces", tips: "Steamed and healthy, but moderate GI due to rice." },
+  "dosa": { name: "Dosa (Plain)", gi: 77, gl: 20, serving: "1 medium", tips: "High GI. Masala dosa (with potato) is even higher." },
+  "paneer": { name: "Paneer (Cheese)", gi: 30, gl: 0, serving: "100g", tips: "Low carb, high fat/protein. Great for blood sugar control." },
+  "chana": { name: "Chana Masala (Chickpeas)", gi: 28, gl: 8, serving: "1 cup", tips: "Low GI superfood. Very filling." },
+  "poha": { name: "Poha (Flattened Rice)", gi: 70, gl: 15, serving: "1 bowl", tips: "High GI. Add lots of veggies and peanuts to lower it." },
+  "upma": { name: "Upma (Semolina)", gi: 68, gl: 14, serving: "1 bowl", tips: "Moderate. Semolina (Rava) is refined wheat." },
+  "samosa": { name: "Samosa", gi: 75, gl: 18, serving: "1 piece", tips: "High GI and high fat. Occasional treat only." },
+  "biryani": { name: "Biryani (Chicken)", gi: 60, gl: 25, serving: "1 cup", tips: "Mixed GI. Rice raises sugar, but chicken/fat slows it down." },
+  "naan": { name: "Naan (Butter)", gi: 71, gl: 20, serving: "1 piece", tips: "Refined flour (Maida) causes spikes. Avoid if possible." },
+  "rajma": { name: "Rajma (Kidney Beans)", gi: 24, gl: 6, serving: "1 cup", tips: "Excellent low GI choice." },
+
+  // --- FRUITS (Previous DB) ---
   "acai": { name: "Acai Berry", gi: 15, gl: 1, serving: "100g puree", tips: "Superfood. Very low sugar, high in antioxidants." },
   "apple": { name: "Apple (Red/Golden)", gi: 36, gl: 6, serving: "1 medium (138g)", tips: "Always eat with skin for fiber." },
   "apple_green": { name: "Apple (Granny Smith)", gi: 30, gl: 5, serving: "1 medium", tips: "The best apple choice for diabetics due to lower sugar." },
@@ -58,29 +97,88 @@ export default function App() {
   const [results, setResults] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraError, setCameraError] = useState(null);
-  const [view, setView] = useState('home'); 
+  const [view, setView] = useState('auth'); // Default to auth
   const [searchTerm, setSearchTerm] = useState('');
+  
+  // Auth State
+  const [user, setUser] = useState(null);
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
 
+  // --- AUTH LISTENERS & LOGIC ---
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
+        setView('home'); // Auto-redirect to home if logged in
+      } else {
+        setView('auth');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleAuth = async (e) => {
+    e.preventDefault();
+    setAuthError('');
+    setIsAuthLoading(true);
+
+    try {
+      if (isLoginMode) {
+        await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        // Add name to profile
+        if (displayName) {
+          await updateProfile(userCredential.user, { displayName: displayName });
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      let msg = "Authentication failed.";
+      if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
+      if (err.code === 'auth/email-already-in-use') msg = "Email already in use.";
+      if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+      setAuthError(msg);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth);
+      setView('auth');
+      setImageURL(null);
+      setResults(null);
+    } catch (err) {
+      console.error("Logout failed", err);
+    }
+  };
+
+  // --- MODEL LOADING ---
   useEffect(() => {
     async function loadModel() {
       try {
-        console.log("Loading AI Model...");
         const loadedModel = await mobilenet.load();
         setModel(loadedModel);
         setIsModelLoading(false);
-        console.log("AI Model Ready");
       } catch (error) {
         console.error("Failed to load model:", error);
-        // Silent fail on load, will alert on usage
         setIsModelLoading(false);
       }
     }
     loadModel();
   }, []);
 
+  // --- CAMERA & AI LOGIC ---
   const startCamera = async () => {
     setView('camera');
     setCameraError(null);
@@ -124,25 +222,40 @@ export default function App() {
   };
 
   const processResults = (predictions) => {
-    const foundFruit = predictions.find(p => {
+    // 1. Fuzzy Match Logic
+    const foundItem = predictions.find(p => {
       const className = p.className.toLowerCase();
-      return Object.keys(FRUIT_DB).some(dbKey => {
-         const simpleName = FRUIT_DB[dbKey].name.toLowerCase().split(' ')[0]; 
-         return className.includes(simpleName) || className.includes(dbKey.replace('_', ' '));
+      // Check for strict DB key match or fuzzy name match
+      return Object.keys(FOOD_DB).some(dbKey => {
+         const foodName = FOOD_DB[dbKey].name.toLowerCase().split(' ')[0]; 
+         // Special case for indian breads
+         if (dbKey === 'roti' || dbKey === 'chapati' || dbKey === 'naan') {
+            if (className.includes('bread') || className.includes('dough')) return true;
+         }
+         return className.includes(foodName) || className.includes(dbKey.replace('_', ' '));
       });
     });
 
-    if (foundFruit) {
-      const className = foundFruit.className.toLowerCase();
+    if (foundItem) {
+      const className = foundItem.className.toLowerCase();
       let matchKey = null;
-      for (const [dbKey, data] of Object.entries(FRUIT_DB)) {
-          if (className.includes(dbKey) || className.includes(data.name.toLowerCase().split('(')[0].trim())) {
-              matchKey = dbKey;
-              break;
-          }
+
+      // Special handling for bread/dough detection mapping to Roti/Chapati
+      if (className.includes('bread') || className.includes('dough')) {
+          // Default to Roti if generic bread is found in Indian context
+          matchKey = 'roti'; 
+      } else {
+        // Standard loop lookup
+        for (const [dbKey, data] of Object.entries(FOOD_DB)) {
+            if (className.includes(dbKey) || className.includes(data.name.toLowerCase().split('(')[0].trim())) {
+                matchKey = dbKey;
+                break;
+            }
+        }
       }
+
       if (matchKey) {
-          setResults({ type: 'found', data: FRUIT_DB[matchKey], confidence: foundFruit.probability });
+          setResults({ type: 'found', data: FOOD_DB[matchKey], confidence: foundItem.probability });
       } else {
           setResults({ type: 'unknown', raw: predictions[0].className });
       }
@@ -155,12 +268,10 @@ export default function App() {
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current) {
-      // 1. Check if model is ready
       if (!model) {
         alert("AI is still loading... please wait 2 seconds.");
         return;
       }
-
       const video = videoRef.current;
       const canvas = canvasRef.current;
       canvas.width = video.videoWidth;
@@ -176,7 +287,7 @@ export default function App() {
   };
 
   const handleManualSelect = (key) => {
-    setResults({ type: 'found', data: FRUIT_DB[key], confidence: 1 });
+    setResults({ type: 'found', data: FOOD_DB[key], confidence: 1 });
     setView('result');
   };
 
@@ -188,10 +299,99 @@ export default function App() {
     setSearchTerm('');
   };
 
-  const filteredFruits = Object.entries(FRUIT_DB).filter(([key, fruit]) => 
-    fruit.name.toLowerCase().includes(searchTerm.toLowerCase())
+  // Filter for Search List
+  const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
+    food.name.toLowerCase().includes(searchTerm.toLowerCase())
   ).sort((a, b) => a[1].name.localeCompare(b[1].name));
 
+  // --- RENDER: AUTH SCREEN ---
+  if (view === 'auth' && !user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden">
+          <div className="bg-emerald-600 p-8 text-center">
+            <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
+              <Zap className="w-8 h-8 text-yellow-300 fill-yellow-300" />
+            </div>
+            <h1 className="text-3xl font-bold text-white">GlucoLens Pro</h1>
+            <p className="text-emerald-100 mt-2">Your diabetic food companion</p>
+          </div>
+
+          <div className="p-8">
+            <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">
+              {isLoginMode ? 'Welcome Back' : 'Create Account'}
+            </h2>
+
+            {authError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {authError}
+              </div>
+            )}
+
+            <form onSubmit={handleAuth} className="space-y-4">
+              {!isLoginMode && (
+                <div className="relative">
+                  <User className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Full Name"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              
+              <div className="relative">
+                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                <input 
+                  type="email" 
+                  placeholder="Email Address"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                <input 
+                  type="password" 
+                  placeholder="Password"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isAuthLoading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-200 flex items-center justify-center"
+              >
+                {isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLoginMode ? 'Sign In' : 'Sign Up')}
+              </button>
+            </form>
+
+            <div className="mt-6 text-center">
+              <button 
+                onClick={() => setIsLoginMode(!isLoginMode)}
+                className="text-slate-500 text-sm hover:text-emerald-600 font-medium"
+              >
+                {isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- RENDER: MAIN APP ---
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
       {/* Header */}
@@ -199,11 +399,16 @@ export default function App() {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={resetApp}>
             <Zap className="w-6 h-6 fill-yellow-300 stroke-yellow-300" />
-            <h1 className="text-xl font-bold tracking-tight">GlucoLens Pro</h1>
+            <h1 className="text-xl font-bold tracking-tight">GlucoLens</h1>
           </div>
-          <button onClick={() => alert("Medical Disclaimer: This app provides estimates. Consult a doctor.")}>
-            <Info className="w-5 h-5 text-emerald-100 hover:text-white" />
-          </button>
+          <div className="flex items-center gap-3">
+             <span className="text-xs font-medium bg-emerald-700 px-2 py-1 rounded-full hidden sm:inline-block">
+               {user?.displayName || user?.email?.split('@')[0]}
+             </span>
+             <button onClick={handleSignOut} title="Sign Out">
+               <LogOut className="w-5 h-5 text-emerald-100 hover:text-white" />
+             </button>
+          </div>
         </div>
       </header>
 
@@ -224,8 +429,8 @@ export default function App() {
               <div className="bg-emerald-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Smartphone className="w-8 h-8 text-emerald-600" />
               </div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">Scan Fruit</h2>
-              <p className="text-slate-500 mb-6">Identify fruits via camera or search our database.</p>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">Scan Food</h2>
+              <p className="text-slate-500 mb-6">Scan fruits or Indian dishes via camera, or search our database.</p>
               
               <button 
                 onClick={startCamera}
@@ -241,26 +446,26 @@ export default function App() {
                 <Search className="w-5 h-5 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Search 50+ fruits..." 
+                  placeholder="Search Roti, Rice, Apple..." 
                   className="bg-transparent w-full outline-none text-slate-700 placeholder:text-slate-400"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               <div className="max-h-[500px] overflow-y-auto">
-                {filteredFruits.map(([key, fruit]) => (
+                {filteredFoods.map(([key, food]) => (
                   <button 
                     key={key}
                     onClick={() => handleManualSelect(key)}
                     className="w-full text-left p-4 hover:bg-emerald-50 border-b border-slate-50 last:border-0 flex items-center justify-between group"
                   >
                     <div>
-                      <span className="font-medium text-slate-700">{fruit.name}</span>
+                      <span className="font-medium text-slate-700">{food.name}</span>
                       <div className="flex gap-2 mt-1 text-xs">
-                        <span className={`px-2 py-0.5 rounded-full ${getGILevel(fruit.gi).bg} ${getGILevel(fruit.gi).color}`}>
-                          GI: {fruit.gi}
+                        <span className={`px-2 py-0.5 rounded-full ${getGILevel(food.gi).bg} ${getGILevel(food.gi).color}`}>
+                          GI: {food.gi}
                         </span>
-                        <span className="text-slate-400">GL: {fruit.gl}</span>
+                        <span className="text-slate-400">GL: {food.gl}</span>
                       </div>
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-emerald-500" />
@@ -301,7 +506,6 @@ export default function App() {
                   />
                 </div>
               ) : (
-                // CLICK ANYWHERE ON VIDEO TO CAPTURE
                 <div className="relative w-full h-full" onClick={captureImage}>
                     <video 
                       ref={videoRef} 
@@ -312,7 +516,6 @@ export default function App() {
                     />
                     <canvas ref={canvasRef} className="hidden" />
                     
-                    {/* Overlay */}
                     <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
                       <div className="w-64 h-64 border-2 border-white/50 rounded-2xl relative">
                         <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-emerald-500 -mt-1 -ml-1 rounded-tl-xl"></div>
@@ -328,7 +531,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Bottom Controls */}
             {!cameraError && (
               <div className="bg-black p-8 flex justify-center items-center pb-12">
                  <button 
