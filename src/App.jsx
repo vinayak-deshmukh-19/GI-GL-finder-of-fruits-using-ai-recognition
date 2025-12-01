@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as mobilenet from 'https://esm.sh/@tensorflow-models/mobilenet';
 import '@tensorflow/tfjs';
-import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft, LogOut, User, Lock, Mail, Loader2, Save, Activity } from 'lucide-react';
+import { Camera, Zap, Info, AlertCircle, CheckCircle, XCircle, Search, RefreshCw, Smartphone, ChevronRight, ArrowLeft, LogOut, User, Lock, Mail, Loader2, Save, Activity, UserPlus, SkipForward } from 'lucide-react';
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
@@ -102,13 +102,8 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   
-  // Profile Data
-  const [profile, setProfile] = useState({
-    age: '',
-    diabetesType: 'Type 2',
-    activityLevel: 'Light',
-    dailyGLTarget: 100 // Default
-  });
+  // Profile Data - Initialized to null to represent "No Profile Yet"
+  const [profile, setProfile] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const videoRef = useRef(null);
@@ -120,17 +115,21 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Fetch profile from Firestore
+        // Check if profile exists
         try {
           const docRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setProfile(docSnap.data());
+            setView('home'); // Has profile -> Go to home
+          } else {
+            setProfile(null);
+            setView('welcome'); // No profile -> Go to Welcome Screen
           }
         } catch (err) {
           console.error("Error fetching profile:", err);
+          setView('home'); // Fail safe
         }
-        setView('home'); 
       } else {
         setView('auth');
       }
@@ -143,8 +142,8 @@ export default function App() {
     let baseGL = 100;
     
     // 1. Base on Condition
-    if (type === 'Type 1') baseGL = 80; // Stricter
-    else if (type === 'Type 2') baseGL = 100; // Moderate
+    if (type === 'Type 1') baseGL = 80;
+    else if (type === 'Type 2') baseGL = 100;
     else if (type === 'Pre-diabetic') baseGL = 110;
     else if (type === 'Non-diabetic') baseGL = 130;
 
@@ -168,17 +167,33 @@ export default function App() {
     try {
       if (user) {
         await setDoc(doc(db, "users", user.uid), newProfile);
-        alert(`Profile Saved! Your recommended Daily GL Target is: ${target}`);
+        // Removed alert for smoother experience
         setView('home');
       }
     } catch (err) {
       console.error("Error saving profile:", err);
-      // Fallback for demo if Firestore isn't enabled
-      alert(`Profile saved locally (Enable Firestore to save permanently). Your Target GL: ${target}`);
+      alert(`Profile saved locally (enable Firestore to save permanently). Target GL: ${target}`);
       setView('home');
     } finally {
       setIsSavingProfile(false);
     }
+  };
+
+  const startProfileCreation = () => {
+    // Initialize default profile values before going to form
+    setProfile({
+        age: '',
+        diabetesType: 'Type 2',
+        activityLevel: 'Light',
+        dailyGLTarget: 100
+    });
+    setView('profile');
+  };
+
+  const skipProfile = () => {
+      // User chose to skip. We keep profile as null so no card shows.
+      setProfile(null);
+      setView('home');
   };
 
   // --- AUTH HANDLERS ---
@@ -210,6 +225,7 @@ export default function App() {
       setView('auth');
       setImageURL(null);
       setResults(null);
+      setProfile(null);
     } catch (err) {
       console.error("Logout failed", err);
     }
@@ -352,12 +368,43 @@ export default function App() {
     );
   }
 
-  // --- PROFILE VIEW ---
+  // --- WELCOME / SETUP VIEW ---
+  if (view === 'welcome') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+        <div className="max-w-md w-full bg-white rounded-3xl shadow-xl overflow-hidden p-8 text-center animate-fade-in">
+          <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <UserPlus className="w-10 h-10 text-emerald-600" />
+          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Complete Your Profile</h2>
+          <p className="text-slate-500 mb-8">
+            Tell us about your age, condition, and activity level so we can calculate a personalized Glycemic Load target for you.
+          </p>
+          
+          <button 
+            onClick={startProfileCreation}
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 mb-4"
+          >
+            Create Profile
+          </button>
+          
+          <button 
+            onClick={skipProfile}
+            className="w-full bg-white border border-slate-200 text-slate-500 font-bold py-4 rounded-xl hover:bg-slate-50 flex items-center justify-center gap-2"
+          >
+            Skip for Now <SkipForward className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- PROFILE FORM VIEW ---
   if (view === 'profile') {
     return (
       <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
         <header className="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-50 flex items-center gap-3">
-          <button onClick={() => setView('home')}><ArrowLeft className="w-6 h-6" /></button>
+          <button onClick={() => setView(user ? 'home' : 'welcome')}><ArrowLeft className="w-6 h-6" /></button>
           <h1 className="text-xl font-bold">My Profile</h1>
         </header>
         <main className="max-w-md mx-auto p-4">
@@ -375,21 +422,21 @@ export default function App() {
             <form onSubmit={handleSaveProfile} className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Age</label>
-                <input type="number" placeholder="e.g. 45" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={profile.age} onChange={(e) => setProfile({...profile, age: e.target.value})} required />
+                <input type="number" placeholder="e.g. 45" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl" value={profile?.age || ''} onChange={(e) => setProfile({...profile, age: e.target.value})} required />
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Diabetes Condition</label>
                 <div className="grid grid-cols-2 gap-3">
                   {['Type 1', 'Type 2', 'Pre-diabetic', 'Non-diabetic'].map((type) => (
-                    <button key={type} type="button" onClick={() => setProfile({...profile, diabetesType: type})} className={`p-3 rounded-xl border text-sm font-medium transition-all ${profile.diabetesType === type ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>{type}</button>
+                    <button key={type} type="button" onClick={() => setProfile({...profile, diabetesType: type})} className={`p-3 rounded-xl border text-sm font-medium transition-all ${profile?.diabetesType === type ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200'}`}>{type}</button>
                   ))}
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-2">Activity Level</label>
-                <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={profile.activityLevel} onChange={(e) => setProfile({...profile, activityLevel: e.target.value})}>
+                <select className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none" value={profile?.activityLevel || 'Light'} onChange={(e) => setProfile({...profile, activityLevel: e.target.value})}>
                   <option value="Sedentary (0 days)">Sedentary (Little/No Exercise)</option>
                   <option value="Light (1-3 days)">Light (1-3 days/week)</option>
                   <option value="Moderate (3-5 days)">Moderate (3-5 days/week)</option>
@@ -426,7 +473,7 @@ export default function App() {
             <h1 className="text-xl font-bold tracking-tight">Glyco Calculator</h1>
           </div>
           <div className="flex items-center gap-3">
-             <button onClick={() => setView('profile')} className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 rounded-full transition-colors">
+             <button onClick={startProfileCreation} className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 rounded-full transition-colors">
                <User className="w-4 h-4 text-white" />
                <span className="text-xs font-medium text-white hidden sm:inline-block">
                  {user?.displayName || "Profile"}
@@ -440,8 +487,8 @@ export default function App() {
       </header>
 
       <main className="max-w-md mx-auto p-4">
-        {/* DAILY GL TARGET CARD */}
-        {view === 'home' && profile.dailyGLTarget > 0 && (
+        {/* DAILY GL TARGET CARD - ONLY SHOWS IF PROFILE EXISTS */}
+        {view === 'home' && profile && profile.dailyGLTarget > 0 && (
           <div className="mb-6 bg-gradient-to-r from-blue-600 to-blue-500 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
             <Activity className="absolute right-[-10px] bottom-[-10px] w-24 h-24 text-white/10" />
             <p className="text-blue-100 text-sm font-medium mb-1">Your Recommended Limit</p>
