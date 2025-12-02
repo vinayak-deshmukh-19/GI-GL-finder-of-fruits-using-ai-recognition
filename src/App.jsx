@@ -102,12 +102,14 @@ export default function App() {
   const [authError, setAuthError] = useState('');
   const [isAuthLoading, setIsAuthLoading] = useState(false);
   
-  // Profile Data - Initialized to null to represent "No Profile Yet"
+  // Profile Data
   const [profile, setProfile] = useState(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
+  // Refs for Video and Stream
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null); // Keep track of stream to stop it later
 
   // --- AUTH LISTENERS ---
   useEffect(() => {
@@ -115,20 +117,19 @@ export default function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Check if profile exists
         try {
           const docRef = doc(db, "users", currentUser.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setProfile(docSnap.data());
-            setView('home'); // Has profile -> Go to home
+            setView('home'); 
           } else {
             setProfile(null);
-            setView('welcome'); // No profile -> Go to Welcome Screen
+            setView('welcome'); 
           }
         } catch (err) {
           console.error("Error fetching profile:", err);
-          setView('home'); // Fail safe
+          setView('home'); 
         }
       } else {
         setView('auth');
@@ -140,14 +141,11 @@ export default function App() {
   // --- PROFILE LOGIC ---
   const calculateGLTarget = (type, activity) => {
     let baseGL = 100;
-    
-    // 1. Base on Condition
     if (type === 'Type 1') baseGL = 80;
     else if (type === 'Type 2') baseGL = 100;
     else if (type === 'Pre-diabetic') baseGL = 110;
     else if (type === 'Non-diabetic') baseGL = 130;
 
-    // 2. Adjust for Activity
     if (activity === 'Sedentary (0 days)') baseGL += 0;
     else if (activity === 'Light (1-3 days)') baseGL += 15;
     else if (activity === 'Moderate (3-5 days)') baseGL += 30;
@@ -167,7 +165,6 @@ export default function App() {
     try {
       if (user) {
         await setDoc(doc(db, "users", user.uid), newProfile);
-        // Removed alert for smoother experience
         setView('home');
       }
     } catch (err) {
@@ -180,7 +177,6 @@ export default function App() {
   };
 
   const startProfileCreation = () => {
-    // Initialize default profile values before going to form
     setProfile({
         age: '',
         diabetesType: 'Type 2',
@@ -191,7 +187,6 @@ export default function App() {
   };
 
   const skipProfile = () => {
-      // User chose to skip. We keep profile as null so no card shows.
       setProfile(null);
       setView('home');
   };
@@ -247,28 +242,58 @@ export default function App() {
   }, []);
 
   // --- CAMERA LOGIC ---
-  const startCamera = async () => {
-    setView('camera');
+  const startCamera = () => {
     setCameraError(null);
     setResults(null);
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-          audio: false,
-        });
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      } else {
-        throw new Error("Camera API not supported");
+    setView('camera');
+  };
+
+  // Initialize Camera when view changes to 'camera'
+  useEffect(() => {
+    if (view === 'camera') {
+      const initCamera = async () => {
+        try {
+          if (streamRef.current) {
+             streamRef.current.getTracks().forEach(track => track.stop());
+          }
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'environment' },
+            audio: false,
+          });
+          
+          streamRef.current = stream; 
+          
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+          }
+        } catch (err) {
+          console.error(err);
+          setCameraError("Could not access camera. Check permissions or use HTTPS.");
+        }
+      };
+      initCamera();
+    }
+
+    // Cleanup
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
-    } catch (err) {
-      setCameraError("Could not access camera. Check permissions or use HTTPS.");
+    };
+  }, [view]);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
     }
   };
 
   const identify = async (imgElement) => {
     if (!model) {
-        alert("AI Model is still loading...");
+        alert("AI Model is still loading. Please wait a moment and try again.");
         return;
     }
     setIsScanning(true);
@@ -320,7 +345,10 @@ export default function App() {
 
   const captureImage = () => {
     if (videoRef.current && canvasRef.current) {
-      if (!model) { alert("AI loading..."); return; }
+      if (!model) {
+        alert("AI is still loading... please wait 2 seconds.");
+        return;
+      }
       const video = videoRef.current;
       const canvas = canvasRef.current;
       canvas.width = video.videoWidth;
@@ -340,6 +368,17 @@ export default function App() {
     setView('result');
   };
 
+  const resetApp = () => {
+    setImageURL(null);
+    setResults(null);
+    setView('home');
+    setSearchTerm('');
+  };
+
+  const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
+    food.name.toLowerCase().includes(searchTerm.toLowerCase())
+  ).sort((a, b) => a[1].name.localeCompare(b[1].name));
+
   // --- VIEWS ---
   if (view === 'auth' && !user) {
     return (
@@ -352,16 +391,75 @@ export default function App() {
             <h1 className="text-3xl font-bold text-white">Glyco Calculator</h1>
             <p className="text-emerald-100 mt-2">Your diabetic food companion</p>
           </div>
+
           <div className="p-8">
-            <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
-            {authError && <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2"><AlertCircle className="w-4 h-4" />{authError}</div>}
+            <h2 className="text-xl font-bold text-slate-800 mb-6 text-center">
+              {isLoginMode ? 'Welcome Back' : 'Create Account'}
+            </h2>
+
+            {authError && (
+              <div className="mb-4 p-3 bg-red-50 text-red-600 text-sm rounded-lg flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" />
+                {authError}
+              </div>
+            )}
+
             <form onSubmit={handleAuth} className="space-y-4">
-              {!isLoginMode && <div className="relative"><User className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="text" placeholder="Full Name" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required /></div>}
-              <div className="relative"><Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="email" placeholder="Email Address" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={email} onChange={(e) => setEmail(e.target.value)} required /></div>
-              <div className="relative"><Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" /><input type="password" placeholder="Password" className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:border-emerald-500" value={password} onChange={(e) => setPassword(e.target.value)} required /></div>
-              <button type="submit" disabled={isAuthLoading} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center">{isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLoginMode ? 'Sign In' : 'Sign Up')}</button>
+              {!isLoginMode && (
+                <div className="relative">
+                  <User className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                  <input 
+                    type="text" 
+                    placeholder="Full Name"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    required
+                  />
+                </div>
+              )}
+              
+              <div className="relative">
+                <Mail className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                <input 
+                  type="email" 
+                  placeholder="Email Address"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="relative">
+                <Lock className="absolute left-3 top-3.5 w-5 h-5 text-slate-400" />
+                <input 
+                  type="password" 
+                  placeholder="Password"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+              </div>
+
+              <button 
+                type="submit" 
+                disabled={isAuthLoading}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl transition-all shadow-lg shadow-emerald-200 flex items-center justify-center"
+              >
+                {isAuthLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : (isLoginMode ? 'Sign In' : 'Sign Up')}
+              </button>
             </form>
-            <div className="mt-6 text-center"><button onClick={() => setIsLoginMode(!isLoginMode)} className="text-slate-500 text-sm hover:text-emerald-600 font-medium">{isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}</button></div>
+
+            <div className="mt-6 text-center">
+              <button 
+                onClick={() => setIsLoginMode(!isLoginMode)}
+                className="text-slate-500 text-sm hover:text-emerald-600 font-medium"
+              >
+                {isLoginMode ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -460,10 +558,6 @@ export default function App() {
   }
 
   // --- HOME VIEW ---
-  const filteredFoods = Object.entries(FOOD_DB).filter(([key, food]) => 
-    food.name.toLowerCase().includes(searchTerm.toLowerCase())
-  ).sort((a, b) => a[1].name.localeCompare(b[1].name));
-
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-800 pb-10">
       <header className="bg-emerald-600 text-white p-4 shadow-md sticky top-0 z-50">
