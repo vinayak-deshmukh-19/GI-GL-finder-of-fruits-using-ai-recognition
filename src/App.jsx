@@ -75,6 +75,7 @@ const FOOD_DB = {
   "watermelon": { name: "Watermelon", gi: 72, gl: 5, serving: "1 cup", weight: 150, tips: "High GI, Low GL. Don't eat alone." },
   "papaya": { name: "Papaya", gi: 60, gl: 9, serving: "1 cup", weight: 140, tips: "Medium GI. Digestive enzymes help metabolism." },
   "grape": { name: "Grapes", gi: 53, gl: 5, serving: "1 cup", weight: 150, tips: "Monitor portion. Easy to overeat." },
+  "pomegranate": { name: "Pomegranates", gi: 35, gl: 7, serving: "1/2 cup", weight: 180, tips: "Juice causes sugar spikes. Eat fresh arils."},
 };
 
 // --- Helper Functions ---
