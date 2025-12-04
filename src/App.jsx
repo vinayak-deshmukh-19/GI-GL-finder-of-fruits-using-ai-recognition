@@ -388,7 +388,7 @@ export default function App() {
             <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
               <Zap className="w-8 h-8 text-yellow-300 fill-yellow-300" />
             </div>
-            <h1 className="text-3xl font-bold text-white">Glyco Calculator</h1>
+            <h1 className="text-3xl font-bold text-white">Glyco Vision</h1>
             <p className="text-emerald-100 mt-2">Your diabetic food companion</p>
           </div>
 
@@ -564,7 +564,7 @@ export default function App() {
         <div className="max-w-md mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setView('home'); setResults(null); setImageURL(null); }}>
             <Zap className="w-6 h-6 fill-yellow-300 stroke-yellow-300" />
-            <h1 className="text-xl font-bold tracking-tight">Glyco Calculator</h1>
+            <h1 className="text-xl font-bold tracking-tight">Glyco Vision</h1>
           </div>
           <div className="flex items-center gap-3">
              <button onClick={startProfileCreation} className="flex items-center gap-2 bg-emerald-700 hover:bg-emerald-800 px-3 py-1.5 rounded-full transition-colors">
